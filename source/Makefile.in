@@ -1,0 +1,53 @@
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+include @top_srcdir@/mk/gnu.bsdvars.mk
+
+.SUFFIXES :
+.SUFFIXES : .html .xhtml .js .xml .xpl 
+
+TARGETS = libVDOM.js VDOM.js
+BUILD_RESOURCES = SLAB.js
+
+DOM_LIBS = SLAB base2 NWEvents
+RESOURCES = ${foreach name,${DOM_LIBS},${name}/init.js}
+
+# Rules
+all : build
+
+depend : .depend
+
+.depend :
+	# FIXME
+	# ${XPL} --make-depend ${PARAMS_CONFIG} XBL.xhtml > .depend
+	# ${XPL} --make-depend ${PARAMS_CONFIG} XBLUI.xhtml >> .depend
+	
+build : ${TARGETS}
+
+install: ${TARGETS}
+	${INSTALL} ${.ALLSRC} ${pkglibexecdir}/
+	for name in ${DOM_LIBS}; do \
+		${INSTALL} ${srcdir}/$$name/init.js ${pkglibexecdir}/$$name/; \
+	done
+
+clean : 
+	-rm ${TARGETS}
+	-rm ${BUILD_RESOURCES}
+
+VDOM.js : SLAB.js libVDOM.js
+	cat ${.ALLSRC} |\
+	${JSMIN} - > ${.TARGET}
+
+libVDOM.js : libVDOM.xhtml
+
+SLAB.js : 
+	${CURL} ${SLAB_libexecdir}/SLAB.js > ${.TARGET}
+
+.xhtml.js : 
+	${XPL} ${PARAMS_CONFIG} --path ${<D} ${<F} |\
+	${JSMIN} - > ${.TARGET}
+
+.xpl.js :
+	${XPL2JS} ${.IMPSRC} > ${.TARGET}
+
+

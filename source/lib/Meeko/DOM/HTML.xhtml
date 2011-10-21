@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<html>
+<head>
+<script type="text/html" src="../DOM/System.xhtml"></script>
+<script type="text/html" src="../DOM/Core.xhtml"></script>
+<script>
+<![CDATA[
+
+var HTML = (function() {
+
+// make abbr and output parse on Internet Explorer
+document.createElement("abbr");
+document.createElement("output");
+
+var HTMLCollection = function() {}
+var HTMLOptionsCollection = function() {}
+var HTMLFormControlsCollection = function() {}
+var HTMLDocument = function() {}
+var HTMLElement = function() {}
+var HTMLFormElement = function() {}
+var HTMLSelectElement = function() {}
+var HTMLInputElement = function() {}
+var HTMLTableElement = function() {}
+var HTMLTableSectionElement = function() {}
+var HTMLTableRowElement = function() {}
+
+var HTMLElement = function() {}
+
+HTMLElement.__props__.classList = {
+	get: function(node) { return new Meeko.DOM.DOMTokenList(function() { return node.className; }, function(val) { node.className = val; }); }
+}
+
+return {
+	HTMLCollection: HTMLCollection,
+	HTMLOptionsCollection: HTMLOptionsCollection,
+	HTMLFormControlsCollection: HTMLFormControlsCollection,
+	HTMLDocument: HTMLDocument,
+	HTMLElement: HTMLElement,
+	HTMLFormElement: HTMLFormElement,
+	HTMLSelectElement: HTMLSelectElement,
+	HTMLInputElement: HTMLInputElement,
+	HTMLTableElement: HTMLTableElement,
+	HTMLTableSectionElement: HTMLTableSectionElement,
+	HTMLTableRowElement: HTMLTableRowElement
+};
+
+})();
+
+Meeko.stuff.xplSystem.createNamespace("Meeko.DOM");
+Meeko.XPL.Namespace.enhance(Meeko.DOM, HTML);
+
+
+]]>
+</script>
+</head>
+</html>

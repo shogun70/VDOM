@@ -1,0 +1,49 @@
+# FIXME wrapper.html is hard-coded
+srcdir = @srcdir@
+#VPATH = @srcdir@
+SUBDIRS = # SLAB base2 sizzle NWEvents
+
+include @top_srcdir@/mk/gnu.bsdvars.mk
+
+.SUFFIXES: .html .xml .css
+SUBDIRS = base2
+
+DEMOS = tree menu tabbox table webforms2
+RESOURCES = wf2select.xml button.gif arrow-up.gif arrow-dn.gif arrow-lft.gif arrow-rit.gif menulist-arrow.gif \
+	bookmark.gif utilities-system-monitor.gif go-next.gif close.gif internet-web-browser.gif columnpicker.gif
+TARGETS = blank.html # browser.html
+#TARGETS += ${foreach DEMO,${DEMOS},${DEMO}.html}
+
+PARAMS += --stringparam VDOM_SCRIPT_URL ${pkglibexecdir}/libVDOM.js
+
+all: build
+
+clean: clean-subdirs
+	-rm ${TARGETS}
+	-rm ${RESOURCES}
+	-rm wrapper.html
+
+build: build-subdirs wrapper.html ${TARGETS} ${RESOURCES}
+
+install: install-subdirs ${TARGETS} ${RESOURCES}
+	${INSTALL} ${TARGETS} ${RESOURCES} ${pkgdemodir}/
+
+${TARGETS}: %.html: ${srcdir}/%.html
+	${HTMLPP} ${PARAMS} ${.IMPSRC} |\
+	${HTMLDECOR} --decor wrapper.html - > ${.TARGET}
+
+${RESOURCES}: %: ${srcdir}/%
+	cp ${.IMPSRC} ${.TARGET}
+	
+wrapper.html: ${srcdir}/wrapper.html
+	${HTMLPP} ${PARAMS} ${.IMPSRC} > ${.TARGET}
+
+clean-subdirs: 
+	for dir in ${SUBDIRS}; do make -C $${dir} clean; done
+
+build-subdirs: 
+	for dir in ${SUBDIRS}; do make -C $${dir} build; done
+
+install-subdirs: 
+	for dir in ${SUBDIRS}; do make -C $${dir} install; done
+

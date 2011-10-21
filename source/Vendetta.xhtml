@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<script type="text/javascript">
+<![CDATA[
+
+function extend(dest, source, override) { // FIXME should be Meeko.utils.extend
+	function _extend(dst, src, name, over) {
+		if (!over && (dst.hasOwnProperty && dst.hasOwnProperty(name) || dst[name] != null)) return;
+		dst[name] = src[name];
+	}
+	for (var name in source) _extend(dest, source, name, override);
+	return dest;
+}
+
+var domSystem = Meeko.stuff.domSystem;
+
+extend(domSystem.NodeList.prototype, {
+forEach: function(callback, context) {
+	var n = this.get("length");
+	for (var i=0; i<n; i++) {
+		var node = this.item(i);
+		callback.call(context, node, i, this);
+	}
+},
+every: function(callback, context) {
+	var n = this.get("length");
+	for (var i=0; i<n; i++) {
+		var node = this.item(i);
+		if (!callback.call(context, node, i, this)) return false;
+	}
+	return true;
+},
+some: function(callback, context) {
+	var n = this.get("length");
+	for (var i=0; i<n; i++) {
+		var node = this.item(i);
+		if (callback.call(context, node, i, this)) return true;
+	}
+	return false;
+},
+first: function(callback, context) {
+	var n = this.get("length");
+	for (var i=0; i<n; i++) {
+		var node = this.item(i);
+		if (callback.call(context, node, i, this)) return node;
+	}
+},
+last: function(callback, context) {
+	var n = this.get("length");
+	for (var i=n-1; i>=0; i--) {
+		var node = this.item(i);
+		if (callback.call(context, node, i, this)) return node;
+	}
+},
+slice: function(start, end) {
+	var result = new domSystem.NodeList; // TODO should be same class as this??
+	result.__actual__ = items = [].slice.call(this.__actual__, start, end);
+	return result;
+},
+filter: function(callback, context) {
+	var result = new domSystem.NodeList; // TODO should this be same class as "this"?
+	result.__actual__ = items = [];
+	var n = this.get("length");
+	for (var i=0; i<n; i++) {
+		var node = this.item(i);
+		callback.call(context, node, i, this) && items.push(node.__actual__);
+	}
+	return result;
+}
+});
+
+
+]]>
+</script>
+</head>
+</html>

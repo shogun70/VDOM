@@ -1,0 +1,41 @@
+# NOTE configuration variable expansion is done in the demo root directory,
+# but the makefile is included and used from the demo subdirs. 
+
+# FIXME wrapper.html is hard-coded
+
+demo_srcdir = @srcdir@
+include @top_srcdir@/mk/gnu.bsdvars.mk
+
+.SUFFIXES: .html .xml .css
+DEMOS = tree menu tabbox table webforms2
+RESOURCES = wf2select.xml button.gif arrow-up.gif arrow-dn.gif arrow-lft.gif arrow-rit.gif menulist-arrow.gif \
+	bookmark.gif utilities-system-monitor.gif go-next.gif close.gif internet-web-browser.gif columnpicker.gif
+TARGETS = blank.html # browser.html
+#TARGETS += ${foreach DEMO,${DEMOS},${DEMO}.html}
+
+PARAMS += --stringparam DOM_LIB ${DOM_LIB}
+PARAMS += --stringparam pkglibexecdir ${pkglibexecdir}
+PARAMS += --stringparam VDOM_SCRIPT_URL ${pkglibexecdir}/libVDOM.js
+
+all: build
+
+build: wrapper.html ${TARGETS} ${RESOURCES}
+
+clean:
+	-rm ${TARGETS}
+	-rm ${RESOURCES}
+	-rm wrapper.html
+
+install: ${TARGETS} ${RESOURCES}
+		${INSTALL} ${TARGETS} ${RESOURCES} ${pkgdemodir}/${DOM_LIB}/
+
+
+${TARGETS}: %.html: ${demo_srcdir}/%.html
+	${HTMLPP} ${PARAMS} ${.IMPSRC} |\
+	${HTMLDECOR} --decor wrapper.html - > ${.TARGET}
+
+${RESOURCES}: %: ${demo_srcdir}/%
+	cp ${.IMPSRC} ${.TARGET}
+	
+wrapper.html: ${srcdir}/wrapper.html
+	${HTMLPP} ${PARAMS} ${.IMPSRC} > ${.TARGET}

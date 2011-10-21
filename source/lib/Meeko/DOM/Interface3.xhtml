@@ -1,0 +1,172 @@
+<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<script type="text/html" src="../ECMAScript5.xhtml"></script>
+<script type="text/javascript">
+<![CDATA[
+
+var specText = '\
+DOMObject {}; \
+Node:DOMObject { \
+nodeType; nodeName; nodeValue; tagName; \
+cloneNode:Node(deep); \
+insertBefore:Node(node:Node, ref:Node); \
+replaceChild:Node(node:Node, old:Node); \
+removeChild:Node(old:Node); \
+appendChild:Node(node:Node); \
+compareDocumentPosition(node:Node); \
+isSameNode(node:Node); \
+getElementsByTagName:NodeList(name); \
+getUserData(name); setUserData(name, val, callback); \
+previousSibling:Node; nextSibling:Node; firstChild:Node; lastChild:Node; childNodes:NodeList; \
+}; \
+Window:DOMObject(nodeType=0) {}; \
+Text:Node(nodeType=3) {}; \
+Document:Node(nodeType=9) { \
+getElementById:Node(id); \
+}; \
+HTMLDocument:Document(nodeType=9) {}; \
+Element:Node(nodeType=1) { \
+getAttribute(name); \
+setAttribute(name, val); \
+hasAttribute(name); \
+removeAttribute(name); \
+}; \
+HTMLElement:Element(nodeType=1) { \
+children:NodeList; \
+matchesSelector(selector); \
+}; \
+HTMLLinkElement:HTMLElement(element="link" nodeType=1) {}; \
+HTMLStyleElement:HTMLElement(element="style" nodeType=1) {}; \
+HTMLFormElement:HTMLElement(element="form" nodeType=1) {}; \
+HTMLSelectElement:HTMLElement(element="select" nodeType=1) {}; \
+HTMLInputElement:HTMLElement(element="input" nodeType=1) {}; \
+HTMLTableElement:HTMLElement(element="table" nodeType=1) {}; \
+HTMLTableSectionElement:HTMLElement(element="thead, tfoot, tbody" nodeType=1) {}; \
+HTMLTableRowElement:HTMLElement(element="tr" nodeType=1) {}; \
+NodeList:DOMObject { \
+item:Node(index); \
+length; \
+}; \
+HTMLCollection:NodeList { \
+namedItem:Node(name); \
+}; \
+Event:DOMObject { \
+preventDefault(); stopPropagation(); \
+target:Node; currentTarget:Node; relatedTarget:Node; view:Window; \
+altKey; bubbles; button; cancelable; charCode; clientX; clientY; ctrlKey; detail; eventPhase; \
+isChar; key; keyCode; layerX; layerY; metaKey; pageX; pageY; screenX; screenY; timeStamp; type; \
+}; \
+NodeSelector { \
+querySelector:Node(selector); \
+querySelectorAll:NodeList(selector); \
+}; \
+EventTarget { \
+addEventListener(type, handler, capture); \
+removeEventListener(type, handler, capture); \
+dispatchEvent(event:Event); \
+}; \
+');
+
+
+function eachWord(text, callback) {
+	text.split(/\s+/).forEach(callback);
+}
+
+var append = function(a1, a2) {
+	[].push.apply(a1, a2);
+	return a1;
+}
+
+// TODO a parser for Interface Descriptions, or pre-parse during build
+var InterfaceList = function(text) {
+	var list = text.replace(/}\s*;\s*(?=\S)/g,"};#").split("#");
+	return list.map(Interface);
+}
+var Interface = function(text) {
+	var desc = {};
+	var m = text.match(/^\s*(.*\S)\s*\{\s*(.*)\s*\}\s*;\s*$/);
+	desc.members = Members(m[2]);
+	var def = m[1].split(':');
+	desc.name = def[0];
+	text = def[1];
+	if (text) {
+		m = text.match(/^([^\s(]*)\s*(?:\(\s*(.*)\s*\))?\s*$/);
+		desc.base = m[1];
+		text = m[2];
+		while (text) {
+			m = text.match(/^\s*([^=]*)=("[^"]*"|'[^']*'|[^\s]*)/);
+			text = text.substring(m[0].length);
+			var name = m[1], val = m[2];
+			if (val[0] === '"' || val[0] === "'") val = val.substring(1, val.length-1);
+			else val = (val === "true") ? true :
+				(val === "false") ? false :
+				+val;
+			desc[name] = val;
+		}
+	}
+	return desc;
+}
+
+var Members = function(text) {
+	var strings = text.split(/\s*;\s*/);
+	var members = [];
+	for (var i=0, n=strings.length; i<n; i++) {
+		var s = strings[i];
+		if (s === "") continue;
+		var f = (s.lastIndexOf(')') >= 0) ? Operation(s) : Attribute(s);
+		members.push(f);
+	}
+	return members;
+}
+
+var Operation = function(sig) {
+	var desc = {};
+	var m = sig.match(/\s*(.*)\s*\(\s*(.*)\s*\)\s*/);
+	var def = m[1].split(':');
+	desc.name = def[0];
+	desc.type = def[1];
+	if (m[2]) desc.params = m[2].split(/\s*,\s*/).map(Attribute);
+	else desc.params = [];
+	return desc;
+}
+
+var Attribute = function(sig) {
+	var desc = {};
+	var def = sig.split(':');
+	desc.name = def[0];
+	if (def[1]) desc.type = def[1];
+	return desc;
+}
+
+Meeko.stuff.xplSystem.createNamespace("Meeko.DOMSpec");
+
+
+var interfacesByName = Meeko.DOMSpec.Interfaces = {};
+
+interfaceList.forEach(function(row) {
+	interfacesByName[row.name] = row;
+})
+
+append(interfacesByName.HTMLDocument.members, interfacesByName.NodeSelector.members);
+append(interfacesByName.HTMLElement.members, interfacesByName.NodeSelector.members);
+append(interfacesByName.Window.members, interfacesByName.EventTarget.members);
+append(interfacesByName.Document.members, interfacesByName.EventTarget.members);
+append(interfacesByName.Element.members, interfacesByName.EventTarget.members);
+
+Meeko.stuff.xplSystem.createNamespace("Meeko.DOM");
+Meeko.DOM = (function() {
+
+var all = {};
+eachWord("Node Document Element HTMLDocument HTMLElement NodeList HTMLCollection", function(name) {
+	all[name] = function() {};
+})
+return all;
+
+})();
+
+
+]]>
+</script>
+</head>
+</html>

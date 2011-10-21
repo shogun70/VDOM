@@ -1,0 +1,571 @@
+<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<script type="text/html" src="Interface.xhtml"></script>
+<script type="text/javascript">
+<![CDATA[
+
+function extend(dest, source, override) {
+	function _extend(dst, src, name, over) {
+		if (!over && (dst.hasOwnProperty && dst.hasOwnProperty(name) || dst[name] != null)) return;
+		dst[name] = src[name];
+	}
+	for (var name in source) _extend(dest, source, name, override);
+	return dest;
+}
+
+var append = function(a1, a2) {
+	[].push.apply(a1, a2);
+	return a1;
+}
+
+function setNameOfObject(object, name) {
+	extend(object, {
+		__name__: name,
+		valueOf: function() { return "[object " + this.__name__ + "]"; },
+		toString: function() { return "[object " + this.__name__ + "]"; },
+	}, true);
+}
+
+
+function each(object, callback, context) {
+	for (var key in object) {
+		var val = object[key];
+		if (typeof val !== "function") callback.call(context, key, val, object);
+	}
+}
+
+function eachWord(text, callback) {
+	text.split(/\s+/).forEach(callback);
+}
+
+function coupler(fn, delegate) {
+	return function() {
+		return fn.apply({ delegate: delegate, object: this}, arguments);
+	}
+}
+function Delegate(spec, delegate) {	// TODO surely this can be merged with Relay()
+	var params = [], actualParams = [];
+	spec.params.forEach(function(param, i) {
+		params[i] = param.name; 
+		actualParams[i] = param.name + ((param.type) ? ".__actual__" : "");
+	});
+	var fnBody = [
+		"var __result__ = this.delegate.", spec.name, "(",
+		"this.object.__actual__",
+		(actualParams.length ? ", " + actualParams.join(", ") : ""),
+		");\n",
+		"return ", (spec.type ? "this.object.__system__.wrap(__result__)" : "__result__"), ";\n"
+	];
+	params.push(fnBody.join(""));
+	var fn = Function.apply(this, params);
+	return coupler(fn, delegate);
+}
+function Relay(spec) {
+	var params = [], actualParams = [];
+	spec.params.forEach(function(param, i) {
+		params[i] = param.name; 
+		actualParams[i] = param.name + ((param.type) ? ".__actual__" : "");
+	});
+	var fnBody = [
+		"var __result__ = this.__actual__.", spec.name, "(",
+		actualParams.join(", "),
+		");\n",
+		"return ", (spec.type ? "this.__system__.wrap(__result__)" : "__result__"), ";\n"
+	];
+	params.push(fnBody.join(""));
+	var fn = Function.apply(this, params);	
+	return fn;
+}
+
+Meeko.DOM = (function() {
+
+var all = {};
+eachWord("Node Document Element HTMLDocument HTMLElement NodeList HTMLCollection", function(name) {
+	all[name] = function() {};
+})
+return all;
+
+})();
+
+var domSystem = Meeko.stuff.domSystem = (function() {
+
+var privateKey = Math.random();
+
+function getLocalName(element) {
+	return (element.localName) ? element.localName : element.tagName.replace(element.prefix+":", "");	
+}
+var htmlElementRulesTree = { // TODO this tree should be generated from interfaceTable[]
+	_test: function(node) { return getLocalName(node).toLowerCase(); }, // FIXME toLowerCase() should only apply to HTML elts
+	"link": "HTMLLinkElement",
+	"style": "HTMLStyleElement",
+	"form": "HTMLFormElement",
+	"select": "HTMLSelectElement",
+	"input": "HTMLInputElement",
+	"table": "HTMLTableElement",
+	"thead": "HTMLTableSectionElement",
+	"tfoot": "HTMLTableSectionElement",
+	"tbody": "HTMLTableSectionElement",
+	"tr": "HTMLTableRowElement",
+	_default: "HTMLElement"
+}
+
+var nodeRulesTree = {
+	_test: function(node) { return (node.window !== node) ? node.nodeType : 0; },
+	0: "Window",
+	1: { // Node.ELEMENT_NODE
+		_test: function(node) { return node.namespaceURI },
+		"http://www.w3.org/1999/xhtml" : htmlElementRulesTree,
+		_null: htmlElementRulesTree,
+		_default: "Element"
+	},
+	9: { // Node.DOCUMENT_NODE
+		_test: function(node) { return node.namespaceURI || node.documentElement.namespaceURI; }, // TODO is this valid?
+		"http://www.w3.org/1999/xhtml" : "HTMLDocument",
+		_null: "HTMLDocument",
+		_default: "Document"
+	}
+}
+
+var nodeListRulesTree = {
+	_test: function(nodeList) { return (nodeList.namedItem) ? 1 : 0; },
+	0: "NodeList",
+	1: "HTMLCollection"
+}
+
+/* TODO event type matching
+var eventRulesTree = {
+	_test: function(event) { return event.type; }
+}
+var eventModules = {
+	"MouseEvent": "click mousedown mouseup mouseover mouseout mousemove",
+	"UIEvent": "focus blur submit reset load unload",
+	"TextEvent": "textInput",
+	"MutationEvent": "DOMAttrModified DOMNodeInserted DOMNodeRemoved"
+}
+each(eventModules, function(module, types) {
+	eachWord(types, function(type) {
+		eventRulesTree[type] = module;
+	})	
+})
+*/
+
+var domObjectRulesTree = {
+	_test: function(object) {
+		if (object.nodeType || object.window === object) return 1;
+		if (object.item) return 2;
+		if (object.type) return 3;
+		return null;
+	},
+	1: nodeRulesTree,
+	2: nodeListRulesTree,
+	3: "Event"
+}
+
+function matcher(rule, object) {
+	while ("string" !== typeof rule) {
+		var rc = rule._test(object);
+		if (rc != null) rule = rule[rc] || rule._default || "";
+		else rule = rule._null || "";
+	}
+	return rule;
+}
+
+// TODO tidy-up the DOMInterface utils into a class
+var System = function(key) {
+	if (key != privateKey) throw "Can't create DOM.System interface";
+	this.nodeMatcher = nodeRulesTree;
+	this.nodeListMatcher = nodeListRulesTree;
+	this.domObjectMatcher = domObjectRulesTree;
+}
+setNameOfObject(System.prototype, "Meeko.DOM.System");
+
+extend(System.prototype, {
+getInterfaceForNode: function(node) {
+	return matcher(this.nodeMatcher, node);
+},
+getInterfaceForNodeList: function(nodeList) {
+	return matcher(this.nodeListMatcher, nodeList);
+},
+getInterfaceForEvent: function(event) {
+	return "Event";
+},
+getInterface: function(object) {
+	return matcher(this.domObjectMatcher, object);
+},
+createInterface: function(base, name) {
+	var domSystem = this;
+	var iface = function() {}
+	if (base) iface.prototype = Object.create(base.prototype);
+	iface.prototype.__system__ = this;
+	iface.prototype.__class__ = iface;
+	iface.prototype.__props__ = (base && base.prototype.__props__) ? Object.create(base.prototype.__props__) : {};
+	if (name) iface.prototype.__name__ = name;
+	return iface;
+},
+wrapNode: function(node) {
+	var ifName = this.getInterfaceForNode(node);
+	var wrapper = new this[ifName];
+	wrapper.__actual__ = node;
+	return wrapper;
+},
+wrapNodeList: function(nodeList) {
+	var ifName = this.getInterfaceForNodeList(nodeList);
+	var wrapper = new this[ifName];
+	wrapper.__actual__ = nodeList;
+	return wrapper;
+},
+wrapEvent: function(event) {
+	var ifName = this.getInterfaceForEvent(event);
+	var wrapper = new this[ifName];
+	wrapper.__actual__ = event;
+	return wrapper;
+},
+wrapDOMObject: function(object) {
+	var ifName = this.getInterface(object);
+	var wrapper = new this[ifName];
+	wrapper.__actual__ = object;
+	return wrapper;
+},
+wrap: function(target) {
+	if (typeof target !== "object") return target;
+	return this.wrapDOMObject(target);
+},
+find: function(selector, context) {
+	if (typeof selector !== "string") return this.wrapNode(selector);
+	if (!context) context = document;
+	if (!context.__actual__) context = this.wrapNode(context);
+	return context.querySelector(selector);
+},
+findAll: function(selector, context) {
+	if (typeof selector !== "string") return this.wrapNodeList(selector);
+	if (!context) context = document;
+	if (!context.__actual__) context = this.wrapNode(context);
+	return context.querySelectorAll(selector);	
+},
+
+defineProperty: function(object, name, desc) { // FIXME what if no Object.defineProperty??
+	if (!desc.get && !desc.value) throw "Descriptor has no getter and no value";
+	if (desc.value) object[name] = desc.value;
+	else object.__props__[name] = desc;
+	try { Object.defineProperty(object, name, desc); }
+	catch (error) {} // FIXME
+	return object;
+},
+
+getOwnPropertyDescriptor: function(object, name) {
+	var desc;
+	try { desc = Object.getOwnPropertyDescriptor(object, name); }
+	catch (error) { desc = object.__props__[name]; }
+	return desc;
+},
+
+createDelegate: function(spec, object) {
+	return Delegate(spec, object);
+}
+
+});
+
+
+var domSystem = Meeko.stuff.domSystem = new System(privateKey);
+domSystem.domSpecification = Meeko.DOMSpecification;
+domSystem.natives = (function(global) {
+/*
+return {
+	Node: global.Node || { prototype: document.createComment("") }, // FIXME anything better??
+	Text: global.Text || { prototype: document.createTextNode("") },
+	Window: global.Window || { prototype: global },
+	Document: global.Document || { prototype: document },
+	Element: global.Element || { prototype: document.documentElement },
+	HTMLDocument: global.HTMLDocument || { prototype: document },
+	HTMLElement: global.HTMLElement || { prototype: document.documentElement }, // TODO what about non-HTML documents??
+	NodeList: global.NodeList || { prototype: document.childNodes },
+	HTMLCollection: global.HTMLCollection || { prototype: document.documentElement.children }, // ditto
+	Event: global.Event || { prototype: document.createEvent("CustomEvent") } // FIXME IE
+}
+*/
+
+return {
+	Node: { prototype: document.createComment("") }, // FIXME anything better??
+	Text: { prototype: document.createTextNode("") },
+	Window: { prototype: global },
+	Document: { prototype: document },
+	Element: { prototype: document.documentElement },
+	HTMLDocument: { prototype: document },
+	HTMLElement: { prototype: document.documentElement }, // TODO what about non-HTML documents??
+	NodeList: { prototype: document.childNodes },
+	HTMLCollection: { prototype: document.documentElement.children }, // ditto
+	Event: { prototype: document.createEvent && document.createEvent("Event") || document.createEventObject && document.createEventObject()  } // FIXME IE
+}
+
+
+})(window);
+
+
+var DOMObject = domSystem.DOMObject = function() { // FIXME domSystem.createInterface()
+	this.__system__ = domSystem;
+}        
+
+setNameOfObject(DOMObject.prototype, "Meeko.DOM.DOMObject");
+
+extend(DOMObject.prototype, {
+get: function(name) {
+	var domSystem = this.__system__;
+	var node = this.__actual__;
+	if (arguments.length === 0) return node;
+	var getter = domSystem.getOwnPropertyDescriptor(this, name).get;
+	var val = (getter) ? getter.call(this) : node[name];
+	if (val.item) return domSystem.wrapNodeList(val);
+	if (val.nodeType || val === window) return domSystem.wrapNode(val);
+	return val;
+},
+set: function(name, val) {
+	var domSystem = this.__system__;
+	var node = this.__actual__;
+	if (typeof name === "object") each(name, function(name, val) {
+		this.set(name, val);
+	}, this);
+	var setter = domSystem.getOwnPropertyDescriptor(this, name).set;
+	if (setter) setter.call(this, val);
+	else node[name] = val;
+}
+});
+
+
+var domSpec = Meeko.DOMSpecification;
+domSpec.InterfaceList.forEach(function(ifSpec) {
+	var ifName = ifSpec.name;
+	if (domSystem[ifName]) return;
+	var baseName = ifSpec.base;
+	var iface = domSystem[ifName] = domSystem.createInterface(domSystem[baseName], "Meeko.DOM." + ifName); // FIXME name??
+	var proto = iface.prototype;
+	ifSpec.members.forEach(function(spec) {
+		var name = spec.name;
+		if (spec.params) proto[name] = Relay(spec);
+		else { // FIXME setters
+			var desc = {};
+			desc.get = (spec.type) ?
+				Function("return this.__system__.wrap(this.__actual__." + name + ");") :
+				Function("return this.__actual__." + name + ";");
+			if (spec.flags & domSpec.WRITABLE) desc.set = (spec.type) ?
+				Function("val", "this.__actual__." + name + " = val.__actual__;") :
+				Function("val", "this.__actual__." + name + " = val;");
+			domSystem.defineProperty(proto, name, desc);
+		}
+	})
+});
+
+
+extend(domSystem.NodeList.prototype, {
+
+item: function(i) { // NOTE indexed lookup faster than calling actual.item(i)
+	var node = this.__actual__[i];
+	return this.__system__.wrapNode(node);
+}
+
+}, true);
+
+
+extend(domSystem.HTMLCollection.prototype, {
+
+namedItem: function(name) {
+	var node = this.__actual__[name];
+	return this.__system__.wrapNode(node);
+}
+
+}, true);
+
+extend(domSystem.Node.prototype, {
+compareDocumentPosition: function(node) {
+	return this.__actual__.compareDocumentPosition(node.__actual__);
+},
+isSameNode: function(node) {
+	return (this.__actual__ === node.__actual__);
+}
+});
+
+extend(domSystem.Node.prototype, {
+insertBefore: function(node, ref) {
+	this.__actual__.insertBefore(node.__actual__, ref.__actual__);
+	return node;
+},
+replaceChild: function(node, old) {
+	this.__actual__.replaceChild(node.__actual__, old.__actual__);
+	return old;
+},
+removeChild: function(old) {
+	this.__actual__.removeChild(old.__actual__);
+	return old;
+},
+appendChild: function(node) {
+	this.__actual__.appendChild(node.__actual__);
+	return node;
+}
+}, true); // override
+
+// TODO all this node manager stuff assumes that nodes are only released on unload
+// This might need revising
+var nodeTable = new Array(13);
+for (var i=0; i<13; i++) {
+	nodeTable[i] = [];
+}
+var nodeStorage = {};
+
+var nodeManager = {};
+nodeManager.getStorage = function(node) {
+	if (node.slabID) return nodeStorage[node.slabID];
+	var nodeType = (node != window) ? node.nodeType : 0;
+	var nodeList = nodeTable[nodeType];
+	var index = nodeList.length;
+	nodeList.push(node);
+	var slabID = "slab_" + nodeType + "_" + index;
+	node.slabID = new String(slabID); // NOTE so that node cloning doesn't copy slabID
+	return nodeStorage[slabID] = {};
+}
+nodeManager.releaseNodesByType = function(type, callback, context) {
+	var nodeList = nodeTable[type];
+	for (var i=nodeList.length-1; i>=0; i--) {
+		var node = nodeList[i];
+		delete nodeList[i];
+		if (callback) callback.call(context, node);
+		delete nodeStorage[node.slabID];
+		node.slabID = null; // NOTE can't delete node properties in IE
+	}
+	nodeTable[type] = [];
+}
+
+extend(Meeko.DOM.Node, {
+getUserData: function(node, name) {
+	var store = nodeManager.getStorage(node);
+	return store[name];
+},
+setUserData: function(node, name, val, callback) {
+	var store = nodeManager.getStorage(node);
+	var result = store[name];
+	store[name] = val;
+	return result;
+}
+});
+
+var EventTarget = function() {};
+extend(EventTarget.prototype, {
+
+addEventListener: function(type, listener, useCapture) {
+	var domSystem = this.__system__;
+	var capture = (useCapture) ? 1 : 0;
+	var store = this.getUserData("_EventTarget");
+	var table = (store) ? store.listenerTable : {};
+	if (!store) this.setUserData("_EventTarget", { listenerTable: table }, null);
+	var listeners = table[type];
+	if (!listeners) listeners = table[type] = [ [], [] ];
+	var handlers = listeners[capture];
+	var fn = function(event) {
+		var e = domSystem.wrapEvent(event);
+		return (listener.handleEvent) ?
+			listener.handleEvent(e) :
+			listener(e);
+	}
+	var handler = {
+		fn: fn,
+		listener: listener
+	};
+	handlers.push(handler);
+	return this._addEventListener(type, handler.fn, capture);
+},
+removeEventListener: function(type, listener, useCapture) {
+	var capture = (useCapture) ? 1 : 0;
+	var store = this.getUserData("_EventTarget");
+	if (!store) return;
+	var listeners = store.listenerTable[type];
+	if (!listeners) return;
+	var handlers = listeners[capture];
+	for (var i=handlers.length-1; i>=0; i--) {
+		var handler = handlers[i];
+		if (handler.listener !== listener) continue;
+		handlers.splice(i, 1);
+		return this._removeEventListener(type, handler.fn, capture);
+	}
+}
+	
+});
+
+[ domSystem.Window, domSystem.Document, domSystem.Element ].forEach(function(Node) {
+
+var proto = Node.prototype;
+proto._addEventListener = proto.addEventListener;
+proto._removeEventListener = proto.removeEventListener;
+extend(proto, EventTarget.prototype, true);
+
+});
+
+
+domSystem.createSystem = function() {
+	var subSystem = new Meeko.DOM.System(privateKey);
+	return subSystem;
+}
+
+return domSystem;
+
+})();
+
+
+domSystem.config = function(callback) {
+
+if (!callback) return;
+
+var domSystem = this;
+var domSpec = this.domSpecification;
+var natives = this.natives;
+
+domSpec.InterfaceList.forEach(function(ifSpec) {
+	var ifName = ifSpec.name;
+	iface = domSystem[ifName];
+	var proto = iface.prototype;
+	ifSpec.members.forEach(function(spec) {
+		var name = spec.name, _name = "_" + name;
+		var desc = callback(ifName, spec);
+		if (proto[_name]) name = _name;
+		if (desc) domSystem.defineProperty(proto, name, desc);
+	})
+});
+	
+}
+
+var domSpec = domSystem.domSpecification;
+var natives = domSystem.natives;
+domSystem.config(function(ifName, spec) {
+	if (!natives[ifName]) {
+		console.log("Did not detect native interface for " + ifName);
+		return;
+	}
+	var name = spec.name;
+	var nativeProto = natives[ifName].prototype;
+	var exists;
+	try { exists = (typeof nativeProto[name] !== "undefined"); }
+	catch(error) { exists = true; }
+	if (exists) return;
+	var desc = {};
+	if (spec.params) desc.value = Delegate(spec, Meeko.DOM[ifName]);
+	else {
+		desc.get = (spec.type) ?
+			function() {
+				return this.__system__.wrap(Meeko.DOM[ifName].get(this.__actual__, name));
+			} :
+			function() {
+				return Meeko.DOM[ifName].get(this.__actual__, name);
+			}
+		if (spec.flags & domSpec.WRITABLE) desc.set = (spec.type) ?
+			function(val) {
+				Meeko.DOM[ifName].set(this.__actual__, name, val.__actual__);
+			} :
+			function(val) {
+				Meeko.DOM[ifName].set(this.__actual__, name, val);
+			}
+	}
+	return desc;
+});
+
+]]>
+</script>
+</head>
+</html>

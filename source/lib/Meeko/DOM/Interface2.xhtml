@@ -1,0 +1,255 @@
+<?xml version="1.0"?>
+<html xmlns="http$//www.w3.org/1999/xhtml">
+<head>
+<script type="text/html" src="../ECMAScript5.xhtml"></script>
+<script type="text/javascript">
+<![CDATA[
+
+Meeko.stuff.xplSystem.createNamespace("Meeko.DOMSpecification");
+Meeko.DOMSpecification = (function() {
+
+var Spec = {};
+// Properties can be:
+var WRITABLE = Spec.WRITABLE = 0x1;
+var ENUMERABLE = Spec.ENUMERABLE = 0x2;
+var READONLY = 0x0;
+
+// Parameters of methods can be:
+var INPUT = Spec.INPUT = 0x1;
+
+
+var interfaceList = {
+
+DOMObject: {
+},
+Node$DOMObject: {
+	members: {
+		nodeType:READONLY,
+		nodeName:READONLY,
+		nodeValue:WRITABLE,
+		cloneNode$Node: { deep:READONLY },
+		insertBefore$Node: { node$Node:INPUT, ref$Node:INPUT }, 
+		replaceChild$Node: { node$Node:INPUT, old$Node:INPUT }, 
+		removeChild$Node: { old$Node:INPUT }, 
+		appendChild$Node: { node$Node:INPUT }, 
+		compareDocumentPosition: { node$Node:INPUT }, 
+		isSameNode: { node$Node:INPUT }, 
+		getUserData: { name:INPUT },
+		setUserData: { name:INPUT, val:INPUT, callback:INPUT }, 
+		previousSibling$Node:READONLY,
+		nextSibling$Node:READONLY,
+		firstChild$Node:READONLY,
+		lastChild$Node:READONLY,
+		childNodes$NodeList:READONLY
+	}
+},
+Window$DOMObject: {
+	nodeType:0
+},
+Text$Node: {
+	nodeType:3
+},
+Document$Node: {
+	nodeType:9,
+	members: {
+		getElementsByTagName$NodeList: { name:INPUT }, 
+		getElementById$Node: { id:INPUT }
+	}
+},
+HTMLDocument$Document: {
+	nodeType:9
+},
+Element$Node: {
+	nodeType:1,
+	members: {
+		tagName: READONLY,
+		getElementsByTagName$NodeList: { name:INPUT },
+		getAttribute: { name:INPUT }, 
+		setAttribute: { name:INPUT, val:INPUT }, 
+		hasAttribute: { name:INPUT }, 
+		removeAttribute: { name:INPUT }
+	}
+}, 
+HTMLElement$Element: {
+	nodeType:1,
+	members: {
+		id:WRITABLE,
+		className:WRITABLE,
+		children$NodeList:READONLY,
+		matchesSelector: { selector:INPUT }
+	}
+},
+HTMLLinkElement$HTMLElement: {
+	element:"link", nodeType:1
+}, 
+HTMLStyleElement$HTMLElement: {
+	element:"style", nodeType:1
+}, 
+HTMLFormElement$HTMLElement: {
+	element:"form", nodeType:1
+}, 
+HTMLSelectElement$HTMLElement: {
+	element:"select", nodeType:1
+}, 
+HTMLInputElement$HTMLElement: {
+	element:"input", nodeType:1
+}, 
+HTMLTableElement$HTMLElement: {
+	element:"table", nodeType:1
+}, 
+HTMLTableSectionElement$HTMLElement: {
+	element:"thead, tfoot, tbody", nodeType:1
+}, 
+HTMLTableRowElement$HTMLElement: {
+	element:"tr", nodeType:1
+}, 
+NodeList$DOMObject: {
+	members: {
+		item$Node: { index:INPUT }, 
+		length:READONLY
+	}
+},
+HTMLCollection$NodeList: {
+	members: {
+		namedItem$Node: { name:INPUT }
+	}
+}, 
+Event$DOMObject: {
+	members: {
+		preventDefault: {  },
+		stopPropagation: {  }, 
+		target$Node: READONLY,
+		currentTarget$Node: READONLY,
+		relatedTarget$Node: READONLY,
+		view$Window: READONLY, 
+		altKey: READONLY,
+		bubbles: READONLY,
+		button: READONLY,
+		cancelable: READONLY,
+		charCode: READONLY,
+		clientX: READONLY,
+		clientY: READONLY,
+		ctrlKey: READONLY,
+		detail: READONLY,
+		eventPhase: READONLY,	
+		isChar: READONLY,
+		key: READONLY,
+		keyCode: READONLY,
+		layerX: READONLY,
+		layerY: READONLY,
+		metaKey: READONLY,
+		pageX: READONLY,
+		pageY: READONLY,
+		screenX: READONLY,
+		screenY: READONLY,
+		timeStamp: READONLY,
+		type: READONLY
+	}
+}, 
+NodeSelector: {
+	members: {
+		querySelector$Node: { selector:INPUT }, 
+		querySelectorAll$NodeList: { selector:INPUT }
+	}
+}, 
+EventTarget: {
+	members: {
+		addEventListener: { type:INPUT, handler:INPUT, capture:INPUT }, 
+		removeEventListener: { type:INPUT, handler:INPUT, capture:INPUT }, 
+		dispatchEvent: { event$Event:INPUT }
+	}
+} 
+
+};
+
+function each(object, callback, context) {
+	for (var key in object) {
+		var val = object[key];
+		if (typeof val !== "function") callback.call(context, key, val, object);
+	}
+}
+
+function eachWord(text, callback) {
+	text.split(/\s+/).forEach(callback);
+}
+
+var append = function(a1, a2) {
+	[].push.apply(a1, a2);
+	return a1;
+}
+
+
+// TODO a parser for Interface Descriptions, or pre-parse during build
+var InterfaceList = function(object) {
+	var list = [];
+	each(object, function(key, val) {
+		var iface = Interface(key, val);
+		list.push(iface);
+		list[iface.name] = iface;
+	});
+	return list;
+}
+var Interface = function(name, spec) {
+	var iface = (typeof spec === "object") ? spec : {};
+	var def = name.split("$");
+	iface.name = def[0];
+	iface.base = def[1];
+	iface.members = Members(iface.members || {})
+	return iface;
+}
+
+var Members = function(spec) {
+	var members = [];
+	each(spec, function(key, val) {
+		var desc = (val && typeof val === "object") ? Operation(key, val) : Attribute(key, val);
+		members.push(desc);
+//		members[desc.name] = desc;
+	});
+	return members;
+}
+
+var Operation = function(name, sig) {
+	var desc = {};
+	var def = name.split('$');
+	desc.name = def[0];
+	desc.type = def[1];
+	desc.params = [];
+	each(sig, function(param, flags) {
+		desc.params.push(Attribute(param, flags));
+	});
+	return desc;
+}
+
+var Attribute = function(name, flags) {
+	var desc = {};
+	var def = name.split('$');
+	desc.name = def[0];
+	desc.type = def[1];
+	desc.flags = flags;
+	return desc;
+}
+
+
+interfaceList = Spec.InterfaceList = InterfaceList(interfaceList);
+
+var interfacesByName = Spec.Interfaces = {};
+
+interfaceList.forEach(function(row) {
+	interfacesByName[row.name] = row;
+})
+
+append(interfacesByName.HTMLDocument.members, interfacesByName.NodeSelector.members);
+append(interfacesByName.HTMLElement.members, interfacesByName.NodeSelector.members);
+append(interfacesByName.Window.members, interfacesByName.EventTarget.members);
+append(interfacesByName.Document.members, interfacesByName.EventTarget.members);
+append(interfacesByName.Element.members, interfacesByName.EventTarget.members);
+
+return Spec;
+
+})();
+
+
+]]>
+</script>
+</head>
+</html>
